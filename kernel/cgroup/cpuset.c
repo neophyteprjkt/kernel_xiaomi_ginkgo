@@ -139,7 +139,7 @@ struct cpuset {
 	int relax_domain_level;
 };
 
-#ifdef CONFIG_CPUSET_ASSIST
+#ifdef CONFIG_CPUSETS_ASSIST
 struct cs_target {
 	const char *name;
 	char *cpus;
@@ -1563,13 +1563,11 @@ static void cpuset_attach(struct cgroup_taskset *tset)
 	struct cgroup_subsys_state *css;
 	struct cpuset *cs;
 	struct cpuset *oldcs = cpuset_attach_old_cs;
-	char name_buf[NAME_MAX + 1];
 
 	cgroup_taskset_first(tset, &css);
 	cs = css_cs(css);
 
 	cpus_read_lock();
-
 	mutex_lock(&cpuset_mutex);
 
 	/* prepare for attach */
@@ -1586,9 +1584,6 @@ static void cpuset_attach(struct cgroup_taskset *tset)
 		 * fail.  TODO: have a better way to handle failure here
 		 */
 		WARN_ON_ONCE(update_cpus_allowed(cs, task, cpus_attach));
-
-		if (!strcmp(name_buf, "background"))
-			set_user_nice(task, 10);
 
 		cpuset_change_task_nodemask(task, &cpuset_attach_nodemask_to);
 		cpuset_update_task_spread_flag(cs, task);
@@ -1785,6 +1780,7 @@ out_unlock:
 	return retval ?: nbytes;
 }
 
+#ifdef CONFIG_CPUSETS_ASSIST
 static ssize_t cpuset_write_resmask_assist(struct kernfs_open_file *of,
 					   struct cs_target tgt, size_t nbytes,
 					   loff_t off)
@@ -1792,19 +1788,20 @@ static ssize_t cpuset_write_resmask_assist(struct kernfs_open_file *of,
 	pr_info("cpuset_assist: setting %s to %s\n", tgt.name, tgt.cpus);
 	return cpuset_write_resmask(of, tgt.cpus, nbytes, off);
 }
+#endif
 
 static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
 					 char *buf, size_t nbytes, loff_t off)
 {
-#ifdef CONFIG_CPUSET_ASSIST
+#ifdef CONFIG_CPUSETS_ASSIST
 	static struct cs_target cs_targets[] = {
-		{ "audio-app",		CONFIG_CPUSET_AUDIO_APP },
-		{ "background",		CONFIG_CPUSET_BG },
-		{ "camera-daemon",	CONFIG_CPUSET_CAMERA },
-		{ "foreground",		CONFIG_CPUSET_FG },
-		{ "restricted",		CONFIG_CPUSET_RESTRICTED },
-		{ "system-background",	CONFIG_CPUSET_SYSTEM_BG },
-		{ "top-app",		CONFIG_CPUSET_TOP_APP },
+		/* Little-only cpusets go first */
+		{ "foreground",		"0-5" },
+		{ "background",		"0-2" },
+		{ "system-background",	"0-3" },
+		{ "restricted",		"0-5" },
+		{ "top-app",		"0-7" },
+		{ "camera-daemon",	"0-3,6-7" },
 	};
 	struct cpuset *cs = css_cs(of_css(of));
 	int i;
