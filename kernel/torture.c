@@ -74,7 +74,6 @@ static DEFINE_MUTEX(fullstop_mutex);
 static struct task_struct *onoff_task;
 static long onoff_holdoff;
 static long onoff_interval;
-static torture_ofl_func *onoff_f;
 static long n_offline_attempts;
 static long n_offline_successes;
 static unsigned long sum_offline;
@@ -118,8 +117,6 @@ bool torture_offline(int cpu, long *n_offl_attempts, long *n_offl_successes,
 			pr_alert("%s" TORTURE_FLAG
 				 "torture_onoff task: offlined %d\n",
 				 torture_type, cpu);
-		if (onoff_f)
-			onoff_f();
 		(*n_offl_successes)++;
 		delta = jiffies - starttime;
 		*sum_offl += delta;
@@ -233,14 +230,13 @@ stop:
 /*
  * Initiate online-offline handling.
  */
-int torture_onoff_init(long ooholdoff, long oointerval, torture_ofl_func *f)
+int torture_onoff_init(long ooholdoff, long oointerval)
 {
 	int ret = 0;
 
 #ifdef CONFIG_HOTPLUG_CPU
 	onoff_holdoff = ooholdoff;
 	onoff_interval = oointerval;
-	onoff_f = f;
 	if (onoff_interval <= 0)
 		return 0;
 	ret = torture_create_kthread(torture_onoff, NULL, onoff_task);
@@ -576,7 +572,7 @@ static int stutter;
  * Block until the stutter interval ends.  This must be called periodically
  * by all running kthreads that need to be subject to stuttering.
  */
-bool stutter_wait(const char *title)
+void stutter_wait(const char *title)
 {
 	cond_resched_tasks_rcu_qs();
 	while (READ_ONCE(stutter_pause_test)) {
@@ -590,7 +586,6 @@ bool stutter_wait(const char *title)
 			schedule_timeout_interruptible(round_jiffies_relative(HZ));
 		torture_shutdown_absorb(title);
 	}
-	return !!spt;
 }
 EXPORT_SYMBOL_GPL(stutter_wait);
 
