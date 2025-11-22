@@ -3,7 +3,7 @@
 # Use this script on root of kernel directory
 
 SECONDS=0 # builtin bash timer
-ZIPNAME="Snowly❄️-A10-Ginkgo-$(TZ=Asia/Jakarta date +"%Y%m%d-%H%M").zip"
+ZIPNAME="Neophyte-Eclipse-A10-Ginkgo-$(TZ=Asia/Jakarta date +"%Y%m%d-%H%M").zip"
 TC_DIR="$(pwd)/../tc/"
 CLANG_DIR="${TC_DIR}clang"
 AK3_DIR="$HOME/AnyKernel3"
@@ -16,7 +16,7 @@ export LOCALVERSION
 
 if ! [ -d "${CLANG_DIR}" ]; then
 echo "Clang not found! Cloning to ${TC_DIR}..."
-if ! git clone --depth=1 -b main https://gitlab.com/Panchajanya1999/azure-clang ${CLANG_DIR}; then
+if ! git clone --depth=1 -b master https://github.com/kdrag0n/proton-clang ${CLANG_DIR}; then
 echo "Cloning failed! Aborting..."
 exit 1
 fi
