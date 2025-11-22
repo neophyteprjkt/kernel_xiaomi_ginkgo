@@ -79,7 +79,7 @@ static int free_file_limit = 30000;
 module_param_named(free_file_limit, free_file_limit, int, 0644);
 
 /* Number of SWAP pages in MiB below which tasks should be killed */
-static int free_swap_limit = 40;
+static int free_swap_limit = 32;
 module_param_named(free_swap_limit, free_swap_limit, int, 0644);
 
 static unsigned long reported_pressure;
