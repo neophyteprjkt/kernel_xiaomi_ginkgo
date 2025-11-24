@@ -1,3 +1,4 @@
+#include <linux/binfmts.h>
 #include <linux/cgroup.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
@@ -106,7 +107,7 @@ root_schedtune = {
  *    implementation especially for the computation of the per-CPU boost
  *    value
  */
-#define BOOSTGROUPS_COUNT 8
+#define BOOSTGROUPS_COUNT 6
 
 /* Array of configured boostgroups */
 static struct schedtune *allocated_group[BOOSTGROUPS_COUNT] = {
@@ -190,7 +191,7 @@ bool task_sched_boost(struct task_struct *p)
 	return st->sched_boost_enabled;
 }
 
-static u64 __maybe_unused
+static u64
 sched_boost_override_read(struct cgroup_subsys_state *css,
 			struct cftype *cft)
 {
@@ -199,8 +200,7 @@ sched_boost_override_read(struct cgroup_subsys_state *css,
 	return st->sched_boost_no_override;
 }
 
-static int __maybe_unused
-sched_boost_override_write(struct cgroup_subsys_state *css,
+static int sched_boost_override_write(struct cgroup_subsys_state *css,
 			struct cftype *cft, u64 override)
 {
 	struct schedtune *st = css_st(css);
@@ -534,26 +534,6 @@ int schedtune_cpu_boost(int cpu)
 	return bg->boost_max;
 }
 
-static inline int schedtune_adj_ta(struct task_struct *p)
-{
-	struct schedtune *st;
-	char name_buf[NAME_MAX + 1];
-	int adj = p->signal->oom_score_adj;
-
-	/* Don't touch kthreads */
-	if (p->flags & PF_KTHREAD)
-		return 0;
-
-	st = task_schedtune(p);
-	cgroup_name(st->css.cgroup, name_buf, sizeof(name_buf));
-	if (!strncmp(name_buf, "top-app", strlen("top-app"))) {
-		pr_debug("top app is %s with adj %i\n", p->comm, adj);
-		return adj == 0 ? 10 : 1;
-	}
-
-	return 0;
-}
-
 int schedtune_task_boost(struct task_struct *p)
 {
 	struct schedtune *st;
@@ -609,8 +589,11 @@ int schedtune_prefer_idle(struct task_struct *p)
 static u64
 prefer_idle_read(struct cgroup_subsys_state *css, struct cftype *cft)
 {
-        struct schedtune *st = css_st(css);
-	
+	if (is_battery_saver_on())
+		return 0;
+
+	struct schedtune *st = css_st(css);
+
 	if (is_battery_saver_on())
 		return 0;
 
@@ -630,8 +613,11 @@ prefer_idle_write(struct cgroup_subsys_state *css, struct cftype *cft,
 static s64
 boost_read(struct cgroup_subsys_state *css, struct cftype *cft)
 {
-        struct schedtune *st = css_st(css);
-	
+	if (is_battery_saver_on())
+		return 0;
+
+	struct schedtune *st = css_st(css);
+
 	if (is_battery_saver_on())
 		return 0;
 
@@ -667,7 +653,7 @@ boost_write(struct cgroup_subsys_state *css, struct cftype *cft,
 {
 	struct schedtune *st = css_st(css);
 
-	if (boost < -100 || boost > 100)
+	if (boost < 0 || boost > 100)
 		return -EINVAL;
 
 	st->boost = boost;
@@ -678,13 +664,12 @@ boost_write(struct cgroup_subsys_state *css, struct cftype *cft,
 	return 0;
 }
 
+#ifdef CONFIG_STUNE_ASSIST
 static int boost_write_wrapper(struct cgroup_subsys_state *css,
 			       struct cftype *cft, s64 boost)
 {
-#ifdef CONFIG_STUNE_ASSIST
-	if (!strcmp(current->comm, "init"))
+	if (task_is_booster(current))
 		return 0;
-#endif
 
 	return boost_write(css, cft, boost);
 }
@@ -692,12 +677,25 @@ static int boost_write_wrapper(struct cgroup_subsys_state *css,
 static int prefer_idle_write_wrapper(struct cgroup_subsys_state *css,
 				     struct cftype *cft, u64 prefer_idle)
 {
-#ifdef CONFIG_STUNE_ASSIST
-	if (!strcmp(current->comm, "init"))
+	if (task_is_booster(current))
 		return 0;
-#endif
 
 	return prefer_idle_write(css, cft, prefer_idle);
+}
+#endif
+
+static u64 prefer_high_cap_read(struct cgroup_subsys_state *css,
+				struct cftype *cft)
+{
+	/* Do nothing */
+	return 0;
+}
+
+static int prefer_high_cap_write(struct cgroup_subsys_state *css,
+				 struct cftype *cft, u64 prefer_high_cap)
+{
+	/* Do nothing */
+	return 0;
 }
 
 static struct cftype files[] = {
@@ -716,12 +714,25 @@ static struct cftype files[] = {
 	{
 		.name = "boost",
 		.read_s64 = boost_read,
+#ifdef CONFIG_STUNE_ASSIST
 		.write_s64 = boost_write_wrapper,
+#else
+		.write_u64 = boost_write,
+#endif
 	},
 	{
 		.name = "prefer_idle",
 		.read_u64 = prefer_idle_read,
+#ifdef CONFIG_STUNE_ASSIST
 		.write_u64 = prefer_idle_write_wrapper,
+#else
+		.write_u64 = prefer_idle,
+#endif
+	},
+	{
+		.name = "prefer_high_cap",
+		.read_u64 = prefer_high_cap_read,
+		.write_u64 = prefer_high_cap_write,
 	},
 	{ }	/* terminate */
 };
@@ -758,7 +769,7 @@ static void write_default_values(struct cgroup_subsys_state *css)
 	static struct st_data st_targets[] = {
 		{ "audio-app",	0, 0 },
 		{ "background",	0, 0 },
-		{ "foreground",	0, 0 },
+		{ "foreground",	0, 1 },
 		{ "rt",		0, 0 },
 		{ "top-app",	1, 1 },
 	};
