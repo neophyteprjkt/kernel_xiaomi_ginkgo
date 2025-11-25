@@ -693,6 +693,12 @@ choice
 config PELT_UTIL_HALFLIFE_32
 	bool "32 ms, default for server"
 
+config PELT_UTIL_HALFLIFE_20
+	bool "20 ms, slightly faster"
+	help
+	  Use 20ms as PELT half-life value. This will increase the ramp-up and
+	  decay of utlization and load slightly faster than using 32ms.
+
 config PELT_UTIL_HALFLIFE_16
 	bool "16 ms, suggested for interactive workloads"
 	help
